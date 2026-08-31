@@ -9,7 +9,6 @@ Pipeline for each candidate response:
  6) if still missing, try multi-token fallback and lemma fallback
 """
 
-from deep_translator import GoogleTranslator
 import pandas as pd
 import spacy
 import numpy as np
