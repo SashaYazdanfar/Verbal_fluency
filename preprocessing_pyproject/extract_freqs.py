@@ -1,5 +1,5 @@
 """
-GOAL: Merge ChildLex frequencies into the fluency dataframe.
+GOAL: Merge childLex frequencies into the fluency dataframe.
 """
 from pathlib import Path
 import time
@@ -74,10 +74,9 @@ for i, row in fluency_df.iterrows():
 pd.set_option("display.max_rows", 500)
 pd.set_option("display.max_columns", 500)
 fluency_df["freq"] = freqlist
-print(fluency_df)
 
-with open (Path(__file__).parent.parent/"results/AoAFreqs_Nones.txt", "a") as f:
-     f.write(f'Missing Freqs:{fluency_df["freq"].isna().sum()}\n')
+# with open (Path(__file__).parent.parent/"results/AoAFreqs_Nones.txt", "a") as f:
+#      f.write(f'Missing Freqs:{fluency_df["freq"].isna().sum()}\n')
 
-fluency_df.to_excel(parent_dir /"results/2026_08_24_fluencyAoAFreqs_df.xlsx")
+# fluency_df.to_excel(parent_dir /"results/2026_08_24_fluencyAoAFreqs_df.xlsx")
 print(time.time() - start)

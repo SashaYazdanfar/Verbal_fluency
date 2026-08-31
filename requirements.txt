@@ -1,0 +1,6 @@
+pandas
+numpy
+spacy
+inflect
+openpyxl
+pytest

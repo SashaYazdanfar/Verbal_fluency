@@ -7,11 +7,9 @@
 # Signifikanz ausgeben (lmer does not produce significance)
 #install.packages("lmerTest")
 #install.packages("broom") #for tibbles
-#install.packages("purrr")
 #install.packages("writexl")
 
 library(broom)
-library(purrr)
 library(writexl)
 library(dplyr) # data manipulation, pipe usage
 library(tidyr) #conversion to wide format
@@ -235,15 +233,21 @@ models <- list(
   lm_aoa_3_2_sem  = lm_aoa_3_2_sem
 )
 
-coef_table <- imap_dfr(models, function(mod, name) {
-  tidy(mod, conf.int = TRUE) %>%
-    mutate(model = name, .before = 1)
-})
+coef_list <- list()
+fit_list <- list()
 
-fit_table <- imap_dfr(models, function(mod, name) {
-  glance(mod) %>%
+for (name in names(models)) {
+  mod <- models[[name]]
+  
+  coef_list[[name]] <- tidy(mod, conf.int = TRUE) %>%
     mutate(model = name, .before = 1)
-})
+  
+  fit_list[[name]] <- glance(mod) %>%
+    mutate(model = name, .before = 1)
+}
+
+coef_table <- bind_rows(coef_list)
+fit_table <- bind_rows(fit_list)
 
 write_xlsx(
   list(coefficients = coef_table, fit_stats = fit_table),

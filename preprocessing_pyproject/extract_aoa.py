@@ -1,5 +1,5 @@
 """
-GOAL: Extract Age of Acquisition for German words using Kuperman et al. English norms.
+GOAL: Extract Age of Acquisition for German words using Kuperman et al. 2012 English norms.
 Pipeline for each candidate response:
  1) lowercase/strip the German response
  2) map it to a translated English term
@@ -9,6 +9,7 @@ Pipeline for each candidate response:
  6) if still missing, try multi-token fallback and lemma fallback
 """
 
+from deep_translator import GoogleTranslator
 import pandas as pd
 import spacy
 import numpy as np
@@ -35,12 +36,12 @@ def lookup_single_word(aoa_lookup, translation, corrects):
     This preserves the required order:
     raw German -> lower/strip -> translation -> normalize English -> match AoA
 
-    Input: aoa_lookup - dictionary with Kuperman words and their ratings
-            translation - translation of the word which is not necessarily in kuperman ratings
+    Input: aoa_lookup - dictionary with words and their ratings
+            translation - translation of the word which is not necessarily in the ratings
             corrects - hypernym and spelling corrections for translations to find them in kuperman ratings
-    Output: rating - 
-            target = match word
-            translation =  translation with of corrects
+    Output: rating - from aoa_lookup
+            target - match word
+            translation -  orig translation
     """
     translation = normalize(corrects.get(translation, translation))
     rating = aoa_lookup.get(translation, np.nan)
@@ -61,7 +62,7 @@ def extract_aoa(word, translation, corrects, aoa_lookup, nlp=nlp, p=p, aggMethod
     main function
     input: word and translation + default: nlp + p (inflect engine)
     output: aoa_rating --> float
-            match_word --> translation whose rating was found and extracted from kuper
+            match_word --> translation whose rating was found and extracted from the norms
     """
     if  pd.isna(word) or pd.isna(translation):
         return np.nan, np.nan, np.nan
@@ -72,7 +73,7 @@ def extract_aoa(word, translation, corrects, aoa_lookup, nlp=nlp, p=p, aggMethod
          ratings_toks = []
          match_toks = []
          for tok in translation.split():
-            aoa_rating_tok, match_tok, tok_translation = lookup_single_word(aoa_lookup, tok, corrects)
+            aoa_rating_tok, match_tok, _ = lookup_single_word(aoa_lookup, tok, corrects)
             if pd.isna(aoa_rating_tok):
                  # check lemma for multi tokens
                  lemma = nlp(tok)[0].lemma_
@@ -226,10 +227,6 @@ HYPERNYM_SUBSTS = {
 
 ALL_CORRECTIONS = {**SPELLING_CORRECTS, **HYPERNYM_SUBSTS}
 
-overlap = set(SPELLING_CORRECTS) & set(HYPERNYM_SUBSTS)
-if overlap:
-    print(f"Conflicts: {overlap}")
-
 # Calling Functions
 # Read Kuperman norms and interpret missing data correctly
 # https://stackoverflow.com/questions/78423794/pandas-read-csv-with-keep-default-na-false-causing-change-in-data-type-of-valu
@@ -258,17 +255,8 @@ fluency_df["AoA"], fluency_df["Match_word"], fluency_df["Translation"]= [t[0] fo
 # pd.set_option('display.max_columns', None)
 # # pd.set_option('display.max_rows', None)
 
-
 # Without spelling corrects
 df_raw = fluency_df.copy()
-# df_raw["AoA"] =  df_raw["Response"].apply(lambda x: aoa_lookup.get(translations.get(x.lower().strip() if pd.notna(x) else x, np.nan)))
-# print(df_raw.isna().sum()) # 1750
-
-# with spelling corrects
-# tpl = fluency_df["Response"].apply(lambda x: extract_aoa(x, translations.get(x.lower().strip() if pd.notna(x) else x, np.nan), ALL_CORRECTIONS, aoa_lookup, aggMethod = np.nanmean))
-
-# df_raw["AoA"] =  df_raw["Response"].apply(lambda x: extract_aoa(x, translations.get(x.lower().strip() if pd.notna(x) else x, np.nan), SPELLING_CORRECTS, aoa_lookup, aggMethod = np.nanmean))
-# print(df_raw.isna().sum()) # 1750   
 
 # Final missing-value logs after cleaning.
 # We keep the pipeline order fixed: lowercase -> translate -> normalize -> match AoA.
@@ -293,8 +281,9 @@ with open (Path(__file__).parent.parent/"results/AoA_Nones.txt", "w") as f:
      f.write(f"Missing AoA after cleaning with spelling corrections only:{spelling_only.isna().sum()}\n")
      f.write(f"Missing AoA after cleaning with spelling corrections + compounds: {spelling_compounds.isna().sum()}\n")
      f.write(f"Missing AoA after cleaning and aggregating missing compounds {fluency_df['AoA'].isna().sum()}\n")
-# Save to excel
-fluency_df.to_excel(Path(__file__).parent.parent/"data/processed/2026_08_24_fluencyAoAFreqs_df.xlsx")
+
+#  Save to excel
+# fluency_df.to_excel(Path(__file__).parent.parent/"data/processed/2026_08_24_fluencyAoAFreqs_df.xlsx")
 
 
 # Sanity check
