@@ -12,8 +12,8 @@
 library(broom)
 library(writexl)
 library(dplyr) # data manipulation, pipe usage
-library(tidyr) #conversion to wide format
-library(performance) #multicollinearity
+library(tidyr) # conversion to wide format
+library(performance) # multicollinearity
 library(readxl) # XLSX data
 library(lme4) 
 library(lmerTest) 
@@ -87,7 +87,7 @@ for (w in 1:4) {
 }
 
 hist(log(df$freq))
-hist(log(nchar(df$Response))) # mit log auch besser! 
+hist(log(nchar(df$Response))) # with log better!
 
 
 # Predict missing frequency values using AoA and response length.
@@ -141,6 +141,7 @@ averaged <- as.data.frame(df_bins %>%
                               .groups = "drop"
                             ))
 
+
 # ---- Zipf transformation ----
 # Convert mean frequencies into Zipf values.
 # This makes the frequency scale more interpretable and comparable across tasks and groups.
@@ -160,60 +161,63 @@ max(averaged["zipf"], na.rm = TRUE)-min(averaged["zipf"], na.rm = TRUE)
 max(averaged["mean_freq"], na.rm = TRUE)-min(averaged["mean_freq"], na.rm = TRUE)
 max(averaged["mean_aoa"], na.rm = TRUE)-min(averaged["mean_aoa"], na.rm = TRUE)
 
+averaged["zipf_z"] <- as.numeric(scale(averaged["zipf"]))
+averaged["aoa_z"] <- as.numeric(scale(averaged["mean_aoa"]))
+
+
+averaged$wordlength   <- map_dbl(averaged$aggreg_words,
+                                 ~ mean(str_length(str_split(.x, ", ")[[1]]), na.rm = TRUE))
+averaged$wordlength_z <- as.numeric(scale(averaged$wordlength))
 
 # ---- Prepare wide-format comparisons ----
 # Long- to wide-format: each rank bin becomes one row and groups are in separate columns.
 wide_df <- averaged %>%
-  select(-mean_freq) %>%
+  select(Aufgabe, Condition, Group, bin,  zipf_z, aoa_z, wordlength_z, n_words) %>%
   pivot_wider(
     names_from = Group,
-    values_from = c(zipf, mean_aoa, aggreg_words, n_words)
+    values_from = c(zipf_z, aoa_z, wordlength_z, n_words)
   )
 
 # Differences between adults and children / adults and adolescents are calculated here.
 wide_df <- wide_df %>%
   mutate(
-    diff_zipf_3_1 = zipf_3 - zipf_1,       # Erwachsene - Kinder
-    diff_zipf_3_2 = zipf_3 - zipf_2,       # Erwachsene - Jugendliche
-    diff_aoa_3_1  = mean_aoa_3 - mean_aoa_1,
-    diff_aoa_3_2  = mean_aoa_3 - mean_aoa_2,
+    diff_zipf_3_1 = zipf_z_3 - zipf_z_1,       # Erwachsene - Kinder
+    diff_zipf_3_2 = zipf_z_3 - zipf_z_2,       # Erwachsene - Jugendliche
+    diff_aoa_3_1  = aoa_z_3 - aoa_z_1,
+    diff_aoa_3_2  = aoa_z_3 - aoa_z_2,
+    dif_wordlength_3_1 = wordlength_z_3 - wordlength_z_1,       # Erwachsene - Kinder
+    dif_wordlength_3_2 = wordlength_z_3 - wordlength_z_2, 
   )
 
-# Calculate mean word length for each group and derive group differences.
-wide_df <- mutate(wide_df, word_length_1 = map_dbl(aggreg_words_1, ~ mean(str_length(str_split(.x, ", ")[[1]]), na.rm = TRUE)))
-wide_df <- mutate(wide_df, word_length_2 = map_dbl(aggreg_words_2, ~ mean(str_length(str_split(.x, ", ")[[1]]), na.rm = TRUE)))
-wide_df <- mutate(wide_df, word_length_3 = map_dbl(aggreg_words_3, ~ mean(str_length(str_split(.x, ", ")[[1]]), na.rm = TRUE)))
-
-wide_df <- wide_df %>%
-  mutate(
-    dif_wordlength_3_1 = word_length_3 - word_length_1,       # Erwachsene - Kinder
-    dif_wordlength_3_2 = word_length_3 - word_length_2,       # Erwachsene - Jugendliche
-  )
+# Sanity-Check
+nrow(distinct(averaged, Aufgabe, Condition, bin)) == nrow(wide_df)
+sum(n_per_aufgabe$N) == nrow(wide_df)
+colSums(is.na(wide_df))
 
 # ---- Linear models for the lexical task ----
 # Fit linear models for the lexical task.
-lm_zipf_3_1 <- lm(diff_zipf_3_1 ~ 1 + scale(diff_aoa_3_1) + scale(dif_wordlength_3_1), data = wide_df %>% filter(Condition == 1))
-lm_zipf_3_2 <- lm(diff_zipf_3_2 ~ 1 + scale(diff_aoa_3_2) + scale(dif_wordlength_3_2), data = wide_df %>% filter(Condition == 1))
+lm_zipf_3_1_lex <- lm(diff_zipf_3_1 ~ 1 + diff_aoa_3_1 + dif_wordlength_3_1, data = wide_df %>% filter(Condition == 1))
+lm_zipf_3_2_lex <- lm(diff_zipf_3_2 ~ 1 + diff_aoa_3_2 + dif_wordlength_3_2, data = wide_df %>% filter(Condition == 1))
+?scale
+summary(lm_zipf_3_1_lex)
+summary(lm_zipf_3_2_lex)
 
-summary(lm_zipf_3_1)
-summary(lm_zipf_3_2)
+lm_aoa_3_1_lex <- lm(diff_aoa_3_1 ~ 1 + diff_zipf_3_1 + dif_wordlength_3_1, data = wide_df %>% filter(Condition == 1))
+lm_aoa_3_2_lex <- lm(diff_aoa_3_2 ~ 1 + diff_zipf_3_2 + dif_wordlength_3_2, data = wide_df %>% filter(Condition == 1))
 
-lm_aoa_3_1 <- lm(diff_aoa_3_1 ~ 1 + scale(diff_zipf_3_1) + scale(dif_wordlength_3_1), data = wide_df %>% filter(Condition == 1))
-lm_aoa_3_2 <- lm(diff_aoa_3_2 ~ 1 + scale(diff_zipf_3_2) + scale(dif_wordlength_3_2), data = wide_df %>% filter(Condition == 1))
-
-summary(lm_aoa_3_1)
-summary(lm_aoa_3_2)
+summary(lm_aoa_3_1_lex)
+summary(lm_aoa_3_2_lex)
 
 # ---- Linear models for the semantic task ----
 # Fit the same type of models for the semantic task.
-lm_zipf_3_1_sem <- lm(diff_zipf_3_1 ~ 1 + scale(diff_aoa_3_1) + scale(dif_wordlength_3_1), data = wide_df %>% filter(Condition == 2))
-lm_zipf_3_2_sem <- lm(diff_zipf_3_2 ~ 1 + scale(diff_aoa_3_2) + scale(dif_wordlength_3_2), data = wide_df %>% filter(Condition == 2))
+lm_zipf_3_1_sem <- lm(diff_zipf_3_1 ~ 1 + diff_aoa_3_1 + dif_wordlength_3_1, data = wide_df %>% filter(Condition == 2))
+lm_zipf_3_2_sem <- lm(diff_zipf_3_2 ~ 1 + diff_aoa_3_2 + dif_wordlength_3_2, data = wide_df %>% filter(Condition == 2))
 
 summary(lm_zipf_3_1_sem)
 summary(lm_zipf_3_2_sem)
 
-lm_aoa_3_1_sem <- lm(diff_aoa_3_1 ~ 1 + scale(diff_zipf_3_1) + scale(dif_wordlength_3_1), data = wide_df %>% filter(Condition == 2))
-lm_aoa_3_2_sem <- lm(diff_aoa_3_2 ~ 1 + scale(diff_zipf_3_2) + scale(dif_wordlength_3_2), data = wide_df %>% filter(Condition == 2))
+lm_aoa_3_1_sem <- lm(diff_aoa_3_1 ~ 1 + diff_zipf_3_1 + dif_wordlength_3_1, data = wide_df %>% filter(Condition == 2))
+lm_aoa_3_2_sem <- lm(diff_aoa_3_2 ~ 1 + diff_zipf_3_2 + dif_wordlength_3_2, data = wide_df %>% filter(Condition == 2))
 
 summary(lm_aoa_3_1_sem)
 summary(lm_aoa_3_2_sem)
@@ -223,10 +227,10 @@ summary(lm_aoa_3_2_sem)
 # Tables
 
 models <- list(
-  lm_zipf_3_1     = lm_zipf_3_1,
-  lm_zipf_3_2     = lm_zipf_3_2,
-  lm_aoa_3_1      = lm_aoa_3_1,
-  lm_aoa_3_2      = lm_aoa_3_2,
+  lm_zipf_3_1_lex     = lm_zipf_3_1_lex,
+  lm_zipf_3_2_lex     = lm_zipf_3_2_lex,
+  lm_aoa_3_1_lex     = lm_aoa_3_1_lex,
+  lm_aoa_3_2_lex    = lm_aoa_3_2_lex,
   lm_zipf_3_1_sem = lm_zipf_3_1_sem,
   lm_zipf_3_2_sem = lm_zipf_3_2_sem,
   lm_aoa_3_1_sem  = lm_aoa_3_1_sem,
@@ -251,7 +255,7 @@ fit_table <- bind_rows(fit_list)
 
 write_xlsx(
   list(coefficients = coef_table, fit_stats = fit_table),
-  "results/model_summaries.xlsx"
+  "results/2026_09_28_model_summaries.xlsx"
 )
 
 # Compare with van Heuven et al. (2014): does a Zipf value of 2 correspond to early-acquired words?
